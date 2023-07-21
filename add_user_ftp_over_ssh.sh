@@ -5,7 +5,7 @@
 #
 # AUTHOR             :     Louis GAMBART
 # CREATION DATE      :     2023.03.20
-# RELEASE            :     2.1.0
+# RELEASE            :     2.1.2
 # USAGE SYNTAX       :     .\add_user_ftp_over_ssh.sh [-f|--file] <file>
 #
 # SCRIPT DESCRIPTION :     This script is used to create a user and a SSH key for FTP access
@@ -18,6 +18,8 @@
 # v1.1.0  2023.07.20 - Louis GAMBART - Add --username option
 # v2.0.0  2023.07.20 - Louis GAMBART - Rework the script to be based on public key list
 # v2.1.0  2023.07.21 - Louis GAMBART - Add existent check to avoid overwriting or entry duplication
+# v2.1.1  2023.07.21 - Louis GAMBART - Change color for script output
+# v2.1.2  2023.07.21 - Louis GAMBART - Change error message when no file were given
 #
 #==========================================================================================
 
@@ -31,7 +33,8 @@
 No_Color='\033[0m'      # No Color
 Red='\033[0;31m'        # Red
 Yellow='\033[0;33m'     # Yellow
-Green='\033[0;32m'     # Green
+Green='\033[0;32m'      # Green
+Blue='\033[0;34m'       # Blue
 
 
 ####################
@@ -206,10 +209,10 @@ fi
 #                    #
 ######################
 
-echo -e "${Yellow}Starting the script...${No_Color}\n"
+echo -e "${Blue}Starting the script...${No_Color}\n"
 
 if [ -z "$SSH_KEYS_FILE" ]; then
-    echo -e "${Red}ERR - Please specify a username${No_Color}"
+    echo -e "${Red}ERR - Please specify an input file${No_Color}"
     exit 1
 else
     check_ftp_group
@@ -228,4 +231,4 @@ else
     echo -e "${Green} OK${No_Color}\n"
 fi
 
-echo -e "${Green}Script finished${No_Color}"
+echo -e "${Blue}Script finished${No_Color}"
