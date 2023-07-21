@@ -5,15 +5,19 @@
 #
 # AUTHOR             :     Louis GAMBART
 # CREATION DATE      :     2023.03.20
-# RELEASE            :     1.0.0
-# USAGE SYNTAX       :     .\add_user_ftp_over_ssh.sh [-u|--user] <username>
+# RELEASE            :     2.1.0
+# USAGE SYNTAX       :     .\add_user_ftp_over_ssh.sh [-f|--file] <file>
 #
 # SCRIPT DESCRIPTION :     This script is used to create a user and a SSH key for FTP access
+#                          Imagine for Oracle Linux hosts
 #
 #==========================================================================================
 #
 #                 - RELEASE NOTES -
-# v1.0.0  2023.07.05 - Louis GAMBART - Initial version
+# v1.0.0  2023.07.19 - Louis GAMBART - Initial version
+# v1.1.0  2023.07.20 - Louis GAMBART - Add --username option
+# v2.0.0  2023.07.20 - Louis GAMBART - Rework the script to be based on public key list
+# v2.1.0  2023.07.21 - Louis GAMBART - Add existant check to avoid overwriting or entry duplication
 #
 #==========================================================================================
 
@@ -37,7 +41,6 @@ Green='\033[0;32m'     # Green
 ####################
 
 SCRIPT_NAME="add_user_ftp_over_ssh.sh"
-PUBKEY=$(cat ssh-rsa_keys.txt)
 
 
 #####################
@@ -50,13 +53,14 @@ print_help () {
     # Print help message
     echo -e """
     ${Green} SYNOPSIS
-        ${SCRIPT_NAME} [-u|--user] <username>
+        ${SCRIPT_NAME} [-f|--file] <file>
 
      DESCRIPTION
          This script is used to create a user and a SSH key for FTP access
+         Imagine for Oracle Linux hosts
 
      OPTIONS
-        -u, --user         User name
+        -f, --file         Specify the file to read
         -h, --help         Print the help message
         -v, --version      Print the script version
     ${No_Color}
@@ -76,43 +80,77 @@ print_version () {
 }
 
 
-create_user () {
-    # Create a user
-    # $1: username
-    echo -e "${Yellow}Creating user ${USERNAME}...${No_Color}"
-    sudo useradd -m "$1"
+check_ftp_group () {
+    # Check if "ftp" group exist
+
+    echo -e -n "${Yellow}Checking if group ftp exist...${No_Color}"
     if [ ! "$(getent group ftp)" ]; then
-        echo -e "${Yellow}Creating group ftp...${No_Color}"
-        sudo groupadd ftp
+        echo -e "${Red} ERROR - Group ftp doesn't exist${No_Color}"
+        exit 1
+    else
+        echo -e "${Green} OK${No_Color}\n"
     fi
-    sudo usermod -aG ftp "$1"
+}
+
+
+create_user () {
+    # Create a user and add it to the "ftp" group
+    # $1: username
+    echo -e -n "${Yellow}Creating user $1 and add it to group ftp...${No_Color}"
+    if id -u "$1" >/dev/null 2>&1; then
+        echo -e "${Red} WARN - User $1 already exist${No_Color}"
+        return
+    fi
+    sudo useradd -m "$1"
+    sudo usermod -aG "ftp" "$1"
+    echo -e "${Green} OK${No_Color}"
 }
 
 
 create_ssh_key () {
     # Create a SSH key
     # $1: username
-    echo -e "${Yellow}Creating SSH key for user ${USERNAME}...${No_Color}"
-    sudo -u "$1" -H sh -c 'ssh-keygen -t rsa -f ~/.ssh/id_rsa -q -N ""'
-}
+    echo -e -n "${Yellow}Creating SSH key for user ${USERNAME}...${No_Color}"
+    if [ -f "/home/$1/.ssh/id_rsa_ftp.pub" ]; then
+        echo -e "${Red} WARN - RSA key already exist"
+        return
+    fi
+    sudo -u "$1" -H sh -c 'ssh-keygen -t rsa -f ~/.ssh/id_rsa_ftp -q -N ""'
+    echo -e "${Green} OK${No_Color}"
 
-
-add_public_key () {
-    # Add public key to authorized_keys
-    # $1: username
-    sudo -u "$1" bash -c "echo '$PUBKEY' > /home/$1/.ssh/authorized_keys"
-    sudo chmod 600 /home/"$1"/.ssh/authorized_keys
-    sudo chown "$1":"$1" /home/"$1"/.ssh/authorized_keys
 }
 
 
 configure_ssh_daemon () {
     # Configure the SSH daemon to add the user to the chroot
     # $1: username
+    echo -e -n "${Yellow}Adding connection authorization to SSHD configuration...${No_Color}"
+    if sudo grep -q "$1" /etc/ssh/sshd_config; then
+        echo -e "${Red} WARN - User $1 already exist in SSHD configuration${No_Color}"
+        return
+    fi
     echo "Match User $1
     ForceCommand internal-sftp
-    ChrootDirectory /ftp" | sudo tee -a /etc/ssh/sshd_config
-    sudo service ssh restart
+    ChrootDirectory /ftp" | sudo tee -a /etc/ssh/sshd_config > /dev/null
+    echo -e "${Green} OK${No_Color}"
+}
+
+
+add_public_key () {
+    # Add public key to authorized_keys
+    # $1: username
+    # $2: public key
+    echo -e -n "${Yellow}Adding public key to authorized_keys...${No_Color}"
+    if [ -f "/home/$1/.ssh/authorized_keys" ]; then
+        if sudo grep -Fxq "$2" /home/"$1"/.ssh/authorized_keys; then
+            echo -e "${Red} WARN - Public key already exist in authorized_keys${No_Color}\n"
+            return
+        fi
+    fi
+    sudo -u "$1" bash -c "echo '$2' >> /home/$1/.ssh/authorized_keys"
+    sudo chmod 600 /home/"$1"/.ssh/authorized_keys
+    sudo chown "$1":"$1" /home/"$1"/.ssh/authorized_keys
+    echo -e "${Green} OK${No_Color}\n"
 }
 
 
@@ -125,8 +163,8 @@ configure_ssh_daemon () {
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
-        -u|--user)
-            USERNAME="$2"
+        -f|--file)
+            SSH_KEYS_FILE="$2"
             shift
             ;;
         -h|--help)
@@ -153,12 +191,12 @@ done
 #                  #
 ####################
 
-echo -e "${Yellow}Checking if you are root...${No_Color}"
+echo -e -n "${Yellow}Checking if you are root...${No_Color}"
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "${Red}Please run as root${No_Color}"
+    echo -e "${Red} ERR - Run the script as root${No_Color}"
     exit 1
 else
-    echo -e "${Green}You are root${No_Color}"
+    echo -e "${Green} OK${No_Color}\n"
 fi
 
 
@@ -168,16 +206,26 @@ fi
 #                    #
 ######################
 
-echo -e "${Yellow}Starting the script...${No_Color}"
+echo -e "${Yellow}Starting the script...${No_Color}\n"
 
-if [ -z "$USERNAME" ]; then
-    echo -e "${Red}Please specify a username${No_Color}"
+if [ -z "$SSH_KEYS_FILE" ]; then
+    echo -e "${Red}ERR - Please specify a username${No_Color}"
     exit 1
 else
-    create_user "$USERNAME"
-    create_ssh_key "$USERNAME"
-    configure_ssh_daemon "$USERNAME"
-    add_public_key "$USERNAME"
+    check_ftp_group
+    while IFS= read -r line; do
+        if [ -z "$line" ]; then
+            continue
+        fi
+        USERNAME=$(echo "$line" | cut -d " " -f3)
+        create_user "$USERNAME"
+        create_ssh_key "$USERNAME"
+        configure_ssh_daemon "$USERNAME"
+        add_public_key "$USERNAME" "$line"
+    done < "$SSH_KEYS_FILE"
+    echo -e -n "${Yellow}Restarting SSH daemon...${No_Color}"
+    sudo systemctl restart sshd
+    echo -e "${Green} OK${No_Color}\n"
 fi
 
 echo -e "${Green}Script finished${No_Color}"
