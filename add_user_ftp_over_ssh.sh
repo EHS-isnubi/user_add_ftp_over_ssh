@@ -17,7 +17,7 @@
 # v1.0.0  2023.07.19 - Louis GAMBART - Initial version
 # v1.1.0  2023.07.20 - Louis GAMBART - Add --username option
 # v2.0.0  2023.07.20 - Louis GAMBART - Rework the script to be based on public key list
-# v2.1.0  2023.07.21 - Louis GAMBART - Add existant check to avoid overwriting or entry duplication
+# v2.1.0  2023.07.21 - Louis GAMBART - Add existent check to avoid overwriting or entry duplication
 #
 #==========================================================================================
 
