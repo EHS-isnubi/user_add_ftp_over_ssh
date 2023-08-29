@@ -4,7 +4,7 @@
 # SCRIPT NAME        :     add_user_ftp_over_ssh.sh
 #
 # AUTHOR             :     Louis GAMBART
-# CREATION DATE      :     2023.03.20
+# CREATION DATE      :     2023.07.19
 # RELEASE            :     2.1.2
 # USAGE SYNTAX       :     .\add_user_ftp_over_ssh.sh [-f|--file] <file>
 #
@@ -54,6 +54,7 @@ SCRIPT_NAME="add_user_ftp_over_ssh.sh"
 
 print_help () {
     # Print help message
+
     echo -e """
     ${Green} SYNOPSIS
         ${SCRIPT_NAME} [-f|--file] <file>
@@ -73,6 +74,7 @@ print_help () {
 
 print_version () {
     # Print version message
+
     echo -e """
     ${Green}
     version       ${SCRIPT_NAME} 1.0.0
@@ -99,6 +101,7 @@ check_ftp_group () {
 create_user () {
     # Create a user and add it to the "ftp" group
     # $1: username
+
     echo -e -n "${Yellow}Creating user $1 and add it to group ftp...${No_Color}"
     if id -u "$1" >/dev/null 2>&1; then
         echo -e "${Red} WARN - User $1 already exist${No_Color}"
@@ -113,6 +116,7 @@ create_user () {
 create_ssh_key () {
     # Create a SSH key
     # $1: username
+
     echo -e -n "${Yellow}Creating SSH key for user ${USERNAME}...${No_Color}"
     if [ -f "/home/$1/.ssh/id_rsa_ftp.pub" ]; then
         echo -e "${Red} WARN - RSA key already exist"
@@ -120,13 +124,13 @@ create_ssh_key () {
     fi
     sudo -u "$1" -H sh -c 'ssh-keygen -t rsa -f ~/.ssh/id_rsa_ftp -q -N ""'
     echo -e "${Green} OK${No_Color}"
-
 }
 
 
 configure_ssh_daemon () {
     # Configure the SSH daemon to add the user to the chroot
     # $1: username
+
     echo -e -n "${Yellow}Adding connection authorization to SSHD configuration...${No_Color}"
     if sudo grep -q "$1" /etc/ssh/sshd_config; then
         echo -e "${Red} WARN - User $1 already exist in SSHD configuration${No_Color}"
@@ -143,6 +147,7 @@ add_public_key () {
     # Add public key to authorized_keys
     # $1: username
     # $2: public key
+
     echo -e -n "${Yellow}Adding public key to authorized_keys...${No_Color}"
     if [ -f "/home/$1/.ssh/authorized_keys" ]; then
         if sudo grep -Fxq "$2" /home/"$1"/.ssh/authorized_keys; then
